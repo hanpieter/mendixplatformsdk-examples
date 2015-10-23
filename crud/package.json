@@ -1,0 +1,25 @@
+{
+  "name": "cu-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm install && tsd install && tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "^3.10.1",
+    "mendixmodelcomponents": "0.8.1",
+    "mendixmodelsdk": "0.8.1",
+    "mendixplatformsdk": "0.8.1",
+    "mobservable": "1.0.0",
+    "readline-sync": "^1.2.21",
+    "when": "^3.7.3"
+  },
+  "devDependencies": {
+    "typescript": "1.6.2",
+    "tsd": "0.6.5"
+  }
+}
