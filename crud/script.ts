@@ -1,10 +1,10 @@
 ///<reference path="typings/tsd.d.ts" />
 
 import { MendixSdkClient, Project, OnlineWorkingCopy, Revision } from "mendixplatformsdk";
-import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts } from "mendixmodelsdk";
+import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, menus, security } from "mendixmodelsdk";
 
 import {associate, createEntity, addAutoNumberAttribute, addDateTimeAttribute, addIntegerAttribute, addStringAttribute} from "mendixmodelcomponents";
-import {retrieveLayout, createEditPageForEntity, createListPageForEntity} from "mendixmodelcomponents";
+import {retrieveLayout, createEditPageForEntity, createListPageForEntity, createText} from "mendixmodelcomponents";
 import {createMicroflow, createParameter, createStartEvent, createEndEvent, createRetrieveByAssociationActivity, addObjectToMicroflow} from "mendixmodelcomponents";
 
 import when = require('when');
@@ -84,6 +84,9 @@ function generateApp(workingCopy: OnlineWorkingCopy): when.Promise<OnlineWorking
 		.then(module => createPages(workingCopy.model(), module))
 		.then(module => createMicroflows(module))
 		.then(module => updateNavigation(workingCopy.model(), module))
+		.then(module => updateSecurity(workingCopy.model(),module))
+		.then(module => updateEntitySecurity(workingCopy.model(),module))
+		.then(module =>updatePageSecurity(workingCopy.model(),module))
 		.then(_ => console.log(`Generated app model successfully.`))
 		.then(_ => workingCopy);
 }
@@ -209,18 +212,43 @@ function sortAttributeForEntity(entity: domainmodels.Entity): domainmodels.Attri
  */
 
 function updateNavigation(project: IModel, module: projects.IModule): when.Promise<projects.IModule> {
-	const targetPage: pages.Page = null;
+		const targetPage: pages.Page = null;
 
-	return when.promise<projects.IModule>((resolve, reject) => {
-		let navDoc = project.allNavigationDocuments()[0];
+			return loadAsPromise(project.allNavigationDocuments()[0])
+				.then(navdoc => {
+                       
+                    var navigationProfile = navdoc.desktopProfile;
+                    
+					let pagesList = project.allPages().filter(a => a.name.indexOf('List') >= 0);
+					var menuItemCollection = navigationProfile.menuItemCollection;
+					pagesList.forEach(page => {
+						var  pageName = page.name.replace(/_/g, ' ');
+						console.log('Adding page ' + pageName+ ' to navigation');
+						
+						var pageSetting = new pages.PageSettings();
+        				pageSetting.page = page;		
+						
+						var pageClientAction = new pages.PageClientAction();
+        				pageClientAction.pageSettings = pageSetting;
+						
+						 var menuItem = new menus.MenuItem();
+        				menuItem.caption = createText(pageName); 
+						menuItem.action = pageClientAction;
+						 if(page.name === 'Customer_List'){
+                             navigationProfile.homePage = new navigation.HomePage();
+                            navigationProfile.homePage.page = page;
+                         }
+						
+						menuItemCollection.items.push(menuItem);
+				
+                        
+					});
+					navigationProfile.enabled = true;
+					navigationProfile.applicationTitle = "Mendix";
+					navigationProfile.menuItemCollection = menuItemCollection;                    
 
-		navDoc.load(navdoc => {
-			navdoc.desktopProfile.homePage = new navigation.HomePage();
-			navdoc.desktopProfile.homePage.page = targetPage;
-
-			resolve(module);
-		});
-	});
+					return module;
+				});
 }
 
 /*
@@ -291,4 +319,69 @@ function createExampleMicroflow(module: projects.IModule) {
 	let endEvent = createEndEvent(microflow, "[" + invoice.qualifiedName + "]",
 		"$" + (<microflows.RetrieveAction>retrieveByAssocActivity.action).outputVariableName);
 	previousObject = addObjectToMicroflow(microflow, microflow.objectCollection, endEvent, previousObject, false);
+}
+
+/*
+*
+* Security
+*
+*/
+function updateSecurity(project: IModel, module: projects.IModule): when.Promise<projects.IModule> {
+	console.log('Turning security on to production');
+	return loadAsPromise(project.allProjectSecurities()[0])
+		.then(projectSecurity => {
+			projectSecurity.securityLevel = new security.SecurityLevel("CheckEverything");
+			projectSecurity.adminPassword = '1';
+			return module;
+		});
+	
+}
+
+function updateEntitySecurity(project: IModel, module: projects.IModule): when.Promise<projects.IModule> {
+	console.log('creating access rules');
+	return loadAsPromise(module.moduleSecurity)
+		.then(moduleSecurity => {
+			var moduleRole =moduleSecurity.moduleRoles.filter(a => a.name === 'User')[0];
+			
+			return loadAsPromise(module.domainModel)
+		.then(domainModel => { 
+			var entitiesList = domainModel.entities;
+			
+			entitiesList.forEach(entity => {
+				console.log('creating access rule for'+ entity.name);
+				var accessRule = new domainmodels.AccessRule();
+				accessRule.moduleRoles.push(moduleRole);
+				accessRule.allowCreate = true;
+				accessRule.allowDelete = true;
+				var defaultMemberAccessRights = new domainmodels.MemberAccessRights("ReadWrite");
+				
+				accessRule.defaultMemberAccessRights = defaultMemberAccessRights;
+				entity.accessRules.push(accessRule);
+				
+			});
+			return module;
+			});
+		});
+	}
+			
+		
+			
+function updatePageSecurity(project: IModel, module: projects.IModule): when.Promise<projects.IModule> {
+	console.log('creating access rules for pages');
+	return loadAsPromise(module.moduleSecurity)
+		.then(moduleSecurity => {
+			var moduleRole =moduleSecurity.moduleRoles.filter(a => a.name === 'User')[0];
+			
+				let pagesList = project.allPages().filter(a => a.qualifiedName.indexOf(myFirstModuleName) >= 0);
+					pagesList.forEach(page => {
+						return loadAsPromise(page)
+						.then(pageObj =>{
+							console.log('creating page access for'+ pageObj.name);
+							pageObj.allowedRoles.push(moduleRole);
+							return module;
+						});
+				
+					});
+			return module;
+			});
 }

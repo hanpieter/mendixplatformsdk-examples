@@ -1,7 +1,6 @@
 {
   "name": "cu-demo",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "build": "npm install && tsd install && tsc",
@@ -21,5 +20,7 @@
   "devDependencies": {
     "typescript": "1.6.2",
     "tsd": "0.6.5"
-  }
+  },
+  "keywords": [],
+  "description": ""
 }
